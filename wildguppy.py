@@ -26,15 +26,13 @@ maxbr = float(config_file['maxbrightness'])
 minbr = float(config_file['minbrightness'])
 
 def brightness(im_file):
-    im = Image.open(im_file).convert('L')
-    stat = ImageStat.Stat(im)
-    return stat.rms[0]
+       im = Image.open(im_file)
+       stat = ImageStat.Stat(im)
+       r,g,b = stat.mean
+       return math.sqrt(0.241*(r**2) + 0.691*(g**2) + 0.068*(b**2))
 
 def takeSample(tmpimg):
     os.system("fswebcam -r 356x292 -d /dev/video0 %s" %tmpimg)
-
-def takeScreeenSample(tmpimg):
-    os.system("scrot %s" %tmpimg)
 
 def error_msg(type, arg):
     if type == 1:
@@ -53,30 +51,60 @@ class autoBrightness():
     def __init__(self):
         self.maxbr_ = maxbr
         self.minbr_ = minbr
-                
+        
     def run(self, samplerate=config_file['samplerate']):
         self.samplerate = float(samplerate)
+        first = True
+        old_set = 0
         while True:
-            self.run_once()
-            time.sleep(self.samplerate)
-                        
+            sum_new_set = 0
+            for x in xrange(0,5):
+                tmpimg = "/tmp/autobrightness-sample.jpg"
+                takeSample(tmpimg)
+                brightnessLevel = brightness(tmpimg)
+                print brightnessLevel
+                set = (brightnessLevel*100.0)/110.0
+                new_set = self.minbr_ + ((self.maxbr_ - self.minbr_)*set)/100.0
+                # print 'in cal avg new_set is'
+                # print new_set
+                sum_new_set += new_set
+                if first == False:
+                    time.sleep(self.samplerate / 5)
+            new_set = sum_new_set / 5
+            # print "new_set is"
+            # print new_set
+
+            # print "old_set is"
+            # print old_set
+            
+            if first == False:
+                new_set = (2 * old_set + new_set) / 3
+            first = False
+            # print 'final set is'
+            # print new_set
+            old_set = new_set
+            os.system('xbacklight -set %s' % str(new_set))
+            # print 'xbacklight is'
+            # print os.system('xbacklight')
+            # time.sleep(self.samplerate)
+            
     def run_once(self):
         tmpimg = "/tmp/autobrightness-sample.jpg"
-        tmpScreenImg = "/tmp/autobrightness-screen-sample.jpg"
         takeSample(tmpimg)
-        #takeScreeenSample(tmpScreenImg)
         brightnessLevel = brightness(tmpimg)
-        #ScreenbrightnessLevel = brightness(tmpScreenImg)
         print brightnessLevel
-        #print ScreenbrightnessLevel
-        #set = (brightnessLevel + 255 - ScreenbrightnessLevel)/2.0/255
-        #new_set = self.minbr_ + (self.maxbr_ - self.minbr_)*set
-        new_set = (brightnessLevel * 100)/120
+        set = (brightnessLevel*100.0)/110.0
+        new_set = self.minbr_ + ((self.maxbr_ - self.minbr_)*set)/100.0
         print "\n"
         print new_set
+        # new_set = (old_set + new_set) / 2
+        # print "old_set is"
+        # global old_set
+        # print old_set
+        # old_set = new_set;
         os.system('xbacklight -set %s' % str(new_set))
         return True
-                
+        
 if __name__ == "__main__":
     run = False
     args = sys.argv
@@ -144,9 +172,9 @@ if __name__ == "__main__":
                     error_msg(3, args[i+1]) 
                     sys.exit()
                 break
-            if args[i] == "-g" or args[i] == "--gui":
-               error = False
-               os.system("./panel_app.py")
+                        if args[i] == "-g" or args[i] == "--gui":
+                   error = False
+                           os.system("./panel_app.py")
 
         if error:
             error_msg(2, args[i])
